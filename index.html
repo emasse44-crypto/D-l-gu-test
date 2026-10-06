@@ -652,6 +652,11 @@ renderAllPlayers();renderStaff(staffA,"staffA");renderStaff(staffB,"staffB");sav
 box.querySelector("#cancelScanReview").onclick=function(){box.style.display="none";box.innerHTML="";el("scanStatus").textContent="Lecture annulée.";};
 }
 function downloadText(filename,text){var blob=new Blob([text],{type:"text/plain;charset=utf-8"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}function teamDownloadText(team,name){readPlayers(team,team===playersA?"playersA":"playersB");var lines=[name,"==============================","CAPITAINE : "+(function(){var i=team.findIndex(function(p){return p.captain;});return i>=0?playerLabel(team[i],i):"Non renseigné";})(),"","TITULAIRES"];team.slice(0,11).forEach(function(p,i){lines.push((i+1)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});lines.push("","REMPLAÇANTS");team.slice(11,16).forEach(function(p,i){lines.push((i+12)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});return lines.join("\n");}function downloadTeam(team,name,file){downloadText(file,teamDownloadText(team,name));}function playerLabel(p,i){return (p.name||("Joueur "+(i+1)))+" (n°"+(i+1)+")";} function playerLicense(p){return p.license||"Non renseigné";}
+function isPlayerSentOff(side,index){
+  return cards.some(function(x){
+    return x.team===side&&x.number===index+1&&String(x.type||"").indexOf("🟥")===0;
+  });
+}
 function syncChangeRoster(team,side){
   readPlayers(team,team===playersA?"playersA":"playersB");
   while(team.length<16)team.push({name:"",license:"",captain:false,active:false,role:""});
@@ -665,6 +670,7 @@ function syncChangeRoster(team,side){
     if(outIndex>=0&&outIndex<16)team[outIndex].active=false;
     if(inIndex>=0&&inIndex<16)team[inIndex].active=true;
   });
+  for(var j=0;j<16;j++){if(isPlayerSentOff(side,j))team[j].active=false;}
 }
 function setupChange(team,label){
   var side=team===playersA?"A":"B";
@@ -674,9 +680,9 @@ function setupChange(team,label){
   out.innerHTML="";inn.innerHTML="";
   for(var i=0;i<16;i++){
     var p=team[i];
-    if(p.active){
+    if(p.active&&!isPlayerSentOff(side,i)){
       var o=document.createElement("option");o.value=i;o.textContent=playerLabel(p,i)+" · sur le terrain";out.appendChild(o);
-    }else{
+    }else if(!isPlayerSentOff(side,i)){
       var q=document.createElement("option");q.value=i;q.textContent=playerLabel(p,i)+" · remplaçant / sorti";inn.appendChild(q);
     }
   }
@@ -685,7 +691,7 @@ function setupChange(team,label){
   if(!out.options.length)out.innerHTML="<option value=''>Aucun joueur sur le terrain</option>";
   if(!inn.options.length)inn.innerHTML="<option value=''>Aucun remplaçant disponible</option>";
 }
-function confirmChange(){var team=el("changeForm").dataset.team==="A"?playersA:playersB;var outIndex=Number(el("playerOut").value),inIndex=Number(el("playerIn").value);if(!Number.isInteger(outIndex)||!Number.isInteger(inIndex)||!team[inIndex]){alert("Choisissez un joueur sortant et un remplaçant.");return;}var outPlayer=team[outIndex],inPlayer=team[inIndex];if(!outPlayer.active||inPlayer.active||inIndex<11){alert("Changement impossible.");return;}outPlayer.active=false;inPlayer.active=true;changes.push({team:el("changeForm").dataset.team,out:playerLabel(outPlayer,outIndex),in:playerLabel(inPlayer,inIndex),minute:Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0")});el("changeForm").style.display="none";renderChanges();saveState();}
+function confirmChange(){var team=el("changeForm").dataset.team==="A"?playersA:playersB;var outIndex=Number(el("playerOut").value),inIndex=Number(el("playerIn").value);if(!Number.isInteger(outIndex)||!Number.isInteger(inIndex)||!team[inIndex]){alert("Choisissez un joueur sortant et un remplaçant.");return;}var outPlayer=team[outIndex],inPlayer=team[inIndex];if(!outPlayer.active||inPlayer.active||inIndex<11||isPlayerSentOff(el("changeForm").dataset.team,outIndex)||isPlayerSentOff(el("changeForm").dataset.team,inIndex)){alert("Changement impossible : joueur expulsé.");return;}outPlayer.active=false;inPlayer.active=true;changes.push({team:el("changeForm").dataset.team,out:playerLabel(outPlayer,outIndex),in:playerLabel(inPlayer,inIndex),minute:Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0")});el("changeForm").style.display="none";renderChanges();saveState();}
 function setupCard(side,label){
   var form=el("cardForm");
   var type=form.dataset.type||"";
@@ -697,7 +703,7 @@ function setupCard(side,label){
   var sel=el("cardPlayer");sel.innerHTML="";
   team.forEach(function(p,i){
     p=p||{};
-    if(i<16){
+    if(i<16&&!isPlayerSentOff(side,i)){
       var o=document.createElement("option");o.value=i;
       o.textContent=p.name?playerLabel(p,i):("N°"+(i+1)+" · joueur non renseigné");
       if(p.name&&!p.active)o.textContent+=" · remplaçant / sorti";
@@ -858,7 +864,7 @@ var sel=el("goalPlayer");sel.innerHTML="";
 var assist=el("goalAssist");assist.innerHTML='<option value="">Aucun passeur</option>';
 for(var i=0;i<16;i++){
   var p=team[i];
-  if(!p||!p.active)continue;
+  if(!p||!p.active||isPlayerSentOff(side,i))continue;
   var o=document.createElement("option");o.value=i;o.textContent=playerLabel(p,i);
   sel.appendChild(o);
   var a=document.createElement("option");a.value=i;a.textContent=playerLabel(p,i);
