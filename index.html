@@ -384,15 +384,44 @@ return {A:uniqueAndLimit(A),B:uniqueAndLimit(B)};
 
 function cleanScanCanvas(source){
 var w=source.naturalWidth||source.width,h=source.naturalHeight||source.height,c=document.createElement("canvas"),ctx=c.getContext("2d",{willReadFrequently:true});
-c.width=Math.round(w*1.5);c.height=Math.round(h*1.5);ctx.drawImage(source,0,0,c.width,c.height);
+c.width=Math.round(w*1.8);c.height=Math.round(h*1.8);ctx.drawImage(source,0,0,c.width,c.height);
 var data=ctx.getImageData(0,0,c.width,c.height),d=data.data;
 for(var i=0;i<d.length;i+=4){
 var R=d[i],G=d[i+1],B=d[i+2];
-if(B-R>18&&B-G>0){d[i]=d[i+1]=d[i+2]=255;continue;}
-var v=.299*R+.587*G+.114*B;v=Math.max(0,Math.min(255,(v-125)*1.55+150));d[i]=d[i+1]=d[i+2]=v;
+if(B-R>14&&B-G>0){d[i]=d[i+1]=d[i+2]=255;continue;}
+var v=.299*R+.587*G+.114*B;
+v=Math.max(0,Math.min(255,(v-118)*1.7+145));
+d[i]=d[i+1]=d[i+2]=v;
 }
 ctx.putImageData(data,0,0);return c;
 }
+function scanThresholdCanvas(source,level){
+var c=document.createElement("canvas"),ctx=c.getContext("2d",{willReadFrequently:true});
+c.width=source.width;c.height=source.height;ctx.drawImage(source,0,0);
+var data=ctx.getImageData(0,0,c.width,c.height),d=data.data;
+for(var i=0;i<d.length;i+=4){
+var v=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+v=v<level?0:255;d[i]=d[i+1]=d[i+2]=v;
+}
+ctx.putImageData(data,0,0);return c;
+}
+function scanGrayCanvas(source){
+var c=document.createElement("canvas"),ctx=c.getContext("2d",{willReadFrequently:true});
+c.width=source.width;c.height=source.height;ctx.drawImage(source,0,0);
+var data=ctx.getImageData(0,0,c.width,c.height),d=data.data;
+for(var i=0;i<d.length;i+=4){
+var v=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+v=Math.max(0,Math.min(255,(v-105)*1.9+130));
+d[i]=d[i+1]=d[i+2]=v;
+}
+ctx.putImageData(data,0,0);return c;
+}
+function scanCropX(source,x0,x1){
+var c=document.createElement("canvas"),ctx=c.getContext("2d");
+var a=Math.max(0,Math.min(source.width,x0)),b=Math.max(a,Math.min(source.width,x1));
+c.width=b-a;c.height=source.height;ctx.drawImage(source,a,0,c.width,c.height,0,0,c.width,c.height);return c;
+}
+
 function rotateScanImage(img){
 var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,c=document.createElement("canvas"),ctx=c.getContext("2d");
 c.width=h;c.height=w;ctx.translate(h/2,w/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-w/2,-h/2);return c;
@@ -578,11 +607,11 @@ if(!window.Tesseract){status.textContent="❌ Le moteur OCR n’est pas disponib
 status.textContent="⏳ Préparation de la photo…";
 loadImageFile(file).then(function(img){
 var original=cleanScanCanvas(img);
-status.textContent="⏳ Vérification de l’orientation…";
+status.textContent="⏳ Lecture générale de la feuille…";
 return Tesseract.recognize(original,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(first){
 var bestCanvas=original,best=first;
 if(scanOcrScore(first)<12){
-status.textContent="⏳ Essai avec la photo tournée…";
+status.textContent="⏳ Vérification de l’orientation…";
 var rotated=cleanScanCanvas(rotateScanImage(img));
 return Tesseract.recognize(rotated,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(second){
 if(scanOcrScore(second)>scanOcrScore(first)){bestCanvas=rotated;best=second;}
@@ -590,32 +619,56 @@ return {canvas:bestCanvas,result:best};
 });
 }
 return {canvas:bestCanvas,result:best};
+});
 }).then(function(base){
 var crop=cropScanComposition(base.canvas,base.result),hint=scanTeamHint((base.result.data&&base.result.data.text)||"");
-status.textContent="⏳ Lecture des joueurs et des licences…";
-var namesCanvas=document.createElement("canvas"),nctx=namesCanvas.getContext("2d");
-namesCanvas.width=Math.round(crop.canvas.width*.84);namesCanvas.height=crop.canvas.height;
-nctx.drawImage(crop.canvas,0,0,namesCanvas.width,namesCanvas.height,0,0,namesCanvas.width,namesCanvas.height);
-var right=document.createElement("canvas"),rctx=right.getContext("2d"),rx=Math.round(crop.canvas.width*.56);
-right.width=crop.canvas.width-rx;right.height=crop.canvas.height;
-rctx.drawImage(crop.canvas,rx,0,right.width,right.height,0,0,right.width,right.height);
-var roleCanvas=document.createElement("canvas"),roctx=roleCanvas.getContext("2d"),rox=Math.round(crop.canvas.width*.80);
-roleCanvas.width=crop.canvas.width-rox;roleCanvas.height=crop.canvas.height;
-roctx.drawImage(crop.canvas,rox,0,roleCanvas.width,roleCanvas.height,0,0,roleCanvas.width,roleCanvas.height);
-status.textContent="⏳ Lecture séparée des noms, licences et fonctions…";
+status.textContent="⏳ Lecture renforcée des noms et des numéros…";
+
+var W=crop.canvas.width,H=crop.canvas.height;
+var namesCanvas=scanCropX(crop.canvas,Math.round(W*.12),Math.round(W*.84));
+var namesGray=scanGrayCanvas(namesCanvas);
+var namesBW=scanThresholdCanvas(namesGray,178);
+var namesBW2=scanThresholdCanvas(namesGray,205);
+
+var right=scanCropX(crop.canvas,Math.round(W*.56),W);
+var rightBW=scanThresholdCanvas(scanGrayCanvas(right),190);
+
+var staffCanvas=scanCropX(crop.canvas,Math.round(W*.12),Math.round(W*.72));
+var staffGray=scanGrayCanvas(staffCanvas);
+
+status.textContent="⏳ Comparaison de plusieurs lectures OCR…";
 return Promise.all([
 Tesseract.recognize(namesCanvas,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesCanvas,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(namesGray,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(namesBW,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(namesBW2,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
 Tesseract.recognize(right,"eng",{tessedit_pageseg_mode:"6",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(right,"eng",{tessedit_pageseg_mode:"11",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(roleCanvas,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(roleCanvas,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
+Tesseract.recognize(rightBW,"eng",{tessedit_pageseg_mode:"11",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(staffCanvas,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(staffGray,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
 ]).then(function(r){
-var rows=mergeScanRows(extractScanRows(r[0]),extractScanRows(r[1]),extractScanLicenseRows(r[2]).concat(extractScanLicenseRows(r[3])),extractScanRoleRows(r[4]).concat(extractScanRoleRows(r[5])));
-window.showFullScanReview(rows,hint);
-status.textContent="✅ "+rows.length+" ligne(s) détectée(s). Vérifiez noms, licences et équipe.";
+var nameResults=[r[0],r[1],r[2],r[3]];
+var nameRows=[];
+nameResults.forEach(function(res){nameRows=nameRows.concat(extractScanRows(res));});
+var licenseRows=extractScanLicenseRows(r[4]).concat(extractScanLicenseRows(r[5]));
+var staffRows=[];
+staffRows=staffRows.concat(extractScanRows(r[6])).concat(extractScanRows(r[7]));
+
+var rows=mergeScanRows(nameRows,[],licenseRows,[]);
+var numbered=rows.filter(function(x){return x.number>=1&&x.number<=14;});
+var lastY=numbered.length?Math.max.apply(null,numbered.map(function(x){return x.y;})):0;
+
+staffRows.forEach(function(x){
+if(x.name&&x.y>lastY+35){
+ var exists=rows.some(function(y){return y.name&&y.name.toLowerCase()===x.name.toLowerCase()&&Math.abs(y.y-x.y)<45;});
+ if(!exists)rows.push({y:x.y,name:x.name,license:"",number:0,role:""});
+}
 });
-});}).catch(function(err){console.error("OCR",err);status.textContent="❌ Erreur OCR : "+(err&&err.message?err.message:"lecture impossible");});
+rows.sort(function(a,b){return a.y-b.y;});
+window.showFullScanReview(rows,hint);
+status.textContent="✅ Lecture renforcée terminée. Vérifiez noms, licences et encadrement.";
+});
+}).catch(function(err){console.error("OCR",err);status.textContent="❌ Erreur OCR : "+(err&&err.message?err.message:"lecture impossible");});
 }
 function escapeHtmlAttr(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");}
 window.showFullScanReview=function(rows,hint){
