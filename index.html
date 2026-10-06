@@ -872,10 +872,10 @@ function confirmGoal(){
 var side=el("goalForm").dataset.team;
 var team=side==="A"?playersA:playersB;
 var idx=Number(el("goalPlayer").value);
-if(!Number.isInteger(idx)||!team[idx]||idx<0||idx>15||team[idx].role){alert("Choisissez le buteur.");return;}
+if(!Number.isInteger(idx)||idx<0||idx>=14||!team[idx]||team[idx].role||team[idx].active!==true){alert("Le buteur doit être un joueur actuellement sur le terrain.");return;}
 var assistValue=el("goalAssist").value;
 var assistIdx=assistValue===""?null:Number(assistValue);
-if(assistIdx!==null&&(!Number.isInteger(assistIdx)||!team[assistIdx]||assistIdx<0||assistIdx>15||team[assistIdx].role)){alert("Choisissez un passeur valide.");return;}
+if(assistIdx!==null&&(!Number.isInteger(assistIdx)||assistIdx<0||assistIdx>=14||!team[assistIdx]||team[assistIdx].role||team[assistIdx].active!==true)){alert("Le passeur doit être un joueur actuellement sur le terrain.");return;}
 var goalType=el("goalType").value||"Pied";
 if(side==="A"){scoreA++;}else{scoreB++;}
 goals.push({
