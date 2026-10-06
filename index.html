@@ -1047,20 +1047,7 @@ html+=section("⚪ EXCLUSIONS TEMPORAIRES",exclusionHtml);
 
 box.innerHTML=html;
 }function goHome(){var pages=document.querySelectorAll(".page");pages.forEach(function(p){p.classList.remove("active");p.style.removeProperty("display");});var home=el("home");home.style.display="block";home.hidden=false;window.scrollTo(0,0);}function showPageDirect(pageId){var pages=document.querySelectorAll(".page");pages.forEach(function(p){p.classList.remove("active");p.style.display="none";});var home=document.getElementById("home");if(home)home.style.display="none";var page=document.getElementById(pageId);if(!page)return;page.classList.add("active");page.style.display="block";if(pageId==="changes")renderChanges();if(pageId==="events")renderCards();}
-function deleteChange(index){
- var x=changes[index];if(!x)return;
- if(!confirm("Supprimer ce changement ?"))return;
- var team=x.team==="A"?playersA:playersB;
- var outMatch=String(x.out||"").match(/N°(\\d+)/);
- var inMatch=String(x.in||"").match(/N°(\\d+)/);
- var outIndex=outMatch?Number(outMatch[1])-1:-1;
- var inIndex=inMatch?Number(inMatch[1])-1:-1;
- if(outIndex>=0&&outIndex<team.length)team[outIndex].active=true;
- if(inIndex>=0&&inIndex<team.length)team[inIndex].active=false;
- changes.splice(index,1);
- saveState();renderChanges();
-}
-function renderChanges(){var c=el("changeHistory");c.innerHTML="";if(!changes.length){c.innerHTML="<p class='note'>Aucun changement.</p>";return;}changes.forEach(function(x,i){var d=document.createElement("div");d.className="change-item";var line=document.createElement("div");line.textContent=x.minute+" · Équipe "+x.team+" : "+x.out+" → "+x.in;d.appendChild(line);var actions=document.createElement("div");actions.style.display="flex";actions.style.gap="8px";actions.style.flexWrap="wrap";actions.style.marginTop="8px";var del=document.createElement("button");del.type="button";del.textContent="🗑️ Supprimer";del.className="red";del.onclick=function(){deleteChange(i);};actions.appendChild(del);addMinuteButton(actions,changes,i,renderChanges);d.appendChild(actions);c.appendChild(d);});}
+function renderChanges(){var c=el("changeHistory");c.innerHTML="";if(!changes.length){c.innerHTML="<p class='note'>Aucun changement.</p>";return;}changes.forEach(function(x){var d=document.createElement("div");d.className="change-item";d.textContent=x.minute+" · Équipe "+x.team+" : "+x.out+" → "+x.in;addMinuteButton(d,changes,i,renderChanges);c.appendChild(d);});}
 function updateGoalButtonLabels(){
 var a=el("teamA")?el("teamA").textContent:"Équipe A";
 var b=el("teamB")?el("teamB").textContent:"Équipe B";
@@ -1072,37 +1059,15 @@ if(el("goalsTeamA"))el("goalsTeamA").textContent=a;
 if(el("goalsTeamB"))el("goalsTeamB").textContent=b;
 }
 function openGoalsPage(side){el("home").style.display="none";document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});el("goals").classList.add("active");renderGoalsPage();if(side==="A")setupGoal(playersA,"But "+el("teamA").textContent);else if(side==="B")setupGoal(playersB,"But "+el("teamB").textContent);}
-function openChangesPage(){try{document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");p.style.display="none";});var home=el("home");var page=el("changes");if(home)home.style.display="none";if(page){page.classList.add("active");page.style.display="block";renderChanges();window.scrollTo(0,0);}}catch(e){console.error("Erreur ouverture changements",e);var page=el("changes");if(page){page.classList.add("active");page.style.display="block";}}}el("quickChange").onclick=openChangesPage;el("quickCard").onclick=function(){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");p.style.display="none";});el("home").style.display="none";el("events").classList.add("active");el("events").style.display="block";renderCards();};el("startQuick").onclick=start;
+el("quickChange").onclick=function(){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");p.style.display="none";});el("home").style.display="none";el("changes").classList.add("active");el("changes").style.display="block";renderChanges();};el("quickCard").onclick=function(){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");p.style.display="none";});el("home").style.display="none";el("events").classList.add("active");el("events").style.display="block";renderCards();};el("startQuick").onclick=start;
 el("secondHalf").onclick=secondHalf;el("goalA").onclick=function(){openGoalsPage("A");};el("goalB").onclick=function(){openGoalsPage("B");};el("goalPageA").onclick=function(){setupGoal(playersA,"But "+el("teamA").textContent);};el("goalPageB").onclick=function(){setupGoal(playersB,"But "+el("teamB").textContent);};el("confirmGoal").onclick=confirmGoal;el("confirmCard").onclick=confirmCard;el("pause").onclick=pause;el("reset").onclick=reset;el("startPage").onclick=start;el("pausePage").onclick=pause;
 el("cardSimpleA").onclick=function(){setupCard("A",el("teamA").textContent);};
 el("cardSimpleB").onclick=function(){setupCard("B",el("teamB").textContent);};
 el("cardTypeYellow").onclick=function(){selectCardType("🟨 Jaune");};
 el("cardTypeWhite").onclick=function(){selectCardType("⚪ Blanc");};
 el("cardTypeRed").onclick=function(){selectCardType("🟥 Rouge");};
-document.querySelectorAll("[data-page]").forEach(function(b){b.onclick=function(){
-var page=b.getAttribute("data-page");
-try{
- if(el("home"))el("home").style.display="none";
- document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");p.style.display="none";});
- var target=el(page);
- if(!target)return;
- target.classList.add("active");target.style.display="block";
- if(page==="compositions")renderAllPlayers();
- if(page==="changes")renderChanges();
- if(page==="goals")renderGoalsPage();
- if(page==="events")renderCards();
- if(page==="staff"){renderStaff(staffA,"staffA");renderStaff(staffB,"staffB");renderStaffHistory();}
- if(page==="sheet"){renderTimeline();renderSheet();}
- if(page==="checklist")renderChecklist();
- if(page==="delegateGuide")renderDelegateChecklist();
- if(page==="incidents")renderIncidents();
- if(page==="injuries"){renderInjuryPlayers();renderInjuries();}
- if(page==="report")renderReport();
- if(page==="settings")fillMatchInfo();
-}catch(e){console.error("Erreur page "+page,e);}
-};});
-});
-document.querySelectorAll(".back").forEach(function(b){b.onclick=function(){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");p.style.display="none";});el("home").style.display="block";el("home").hidden=false;window.scrollTo(0,0);};});
+document.querySelectorAll("[data-page]").forEach(function(b){b.onclick=function(){var page=b.getAttribute("data-page");if(page==="compositions")renderAllPlayers();if(page==="changes")renderChanges();if(page==="goals"){renderGoalsPage();}if(page==="events"){renderCards();}if(page==="staff"){renderStaff(staffA,"staffA");renderStaff(staffB,"staffB");renderStaffHistory();}if(page==="sheet"){renderTimeline();renderSheet();}if(page==="checklist"){renderChecklist();}if(page==="delegateGuide"){renderDelegateChecklist();}if(page==="incidents"){renderIncidents();}if(page==="injuries"){renderInjuryPlayers();renderInjuries();}if(page==="report"){renderReport();}if(page==="settings"){fillMatchInfo();}el("home").style.display="none";document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});el(page).classList.add("active");};});
+document.querySelectorAll(".back").forEach(function(b){b.onclick=function(){document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active");});el("home").style.display="block";};});
 el("saveNames").onclick=saveMatchInfo;
 el("scanSheetBtn").onclick=function(){el("matchSheetPhoto").click();};el("matchSheetPhoto").onchange=function(){scanMatchSheet(this.files&&this.files[0]);this.value="";};
 el("saveCompositions").onclick=function(){readPlayers(playersA,"playersA");readPlayers(playersB,"playersB");playersA.forEach(function(p,i){p.active=i<11;});playersB.forEach(function(p,i){p.active=i<11;});renderAllPlayers();saveState();alert("Compositions enregistrées. Les n°1 à 11 sont titulaires, les n°12 à 14 sont remplaçants.");};el("resetComposition").onclick=function(){if(!confirm("Effacer les joueurs, licences et capitaines des deux équipes ?"))return;playersA=Array.from({length:16},function(){return {name:"",license:"",captain:false,active:false,role:""};});playersB=Array.from({length:16},function(){return {name:"",license:"",captain:false,active:false,role:""};});playersA.forEach(function(p,i){p.active=i<11;});playersB.forEach(function(p,i){p.active=i<11;});renderAllPlayers();saveState();alert("Les deux compositions ont été remises à zéro.");};
