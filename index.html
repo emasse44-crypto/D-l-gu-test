@@ -616,49 +616,82 @@ var out=[];
 for(var n=1;n<=14;n++){var target=origin+(n-1)*spacing,selected=[];rows.forEach(function(row){if(Math.abs(row.y-target)<=Math.max(20,Math.min(35,spacing*.46))){row.words.forEach(function(w){if(w.x<=numberX+35)return;var t=w.text.replace(/[^A-Za-zÀ-ÿ' .-]/g," ").replace(/\s+/g," ").trim();if(t.length>=2)selected.push({x:w.x,text:t});});}});selected.sort(function(a,b){return a.x-b.x;});var name=cleanRecognizedName(selected.map(function(w){return w.text;}).join(" "));if(name&&name.length>=3&&!/^(maillot|nom|pr[ée]nom|joueurs?|équipe|equipe|position|titulaire|remplaçant|remplacant|encadrement)$/i.test(name))out.push({number:n,name:name,license:"",role:"",y:target});}
 return out;
 }
+function detectScanTableLines(canvas){
+var ctx=canvas.getContext("2d",{willReadFrequently:true}),w=canvas.width,h=canvas.height;
+var data=ctx.getImageData(0,0,w,h).data,scores=new Array(h).fill(0);
+var xa=Math.floor(w*.02),xb=Math.floor(w*.98);
+for(var y=0;y<h;y++){
+var sum=0,count=0;
+for(var x=xa;x<xb;x+=2){var i=(y*w+x)*4,v=.299*data[i]+.587*data[i+1]+.114*data[i+2];sum+=255-v;count++;}
+scores[y]=sum/count;
+}
+var smooth=scores.map(function(v,i){return (scores[Math.max(0,i-2)]+scores[Math.max(0,i-1)]+v+scores[Math.min(h-1,i+1)]+scores[Math.min(h-1,i+2)])/5;});
+var vals=smooth.slice(Math.floor(h*.15),Math.floor(h*.9)).slice().sort(function(a,b){return a-b;});
+var threshold=vals[Math.floor(vals.length*.78)]||80;
+var candidates=[];
+for(var y=8;y<h-8;y++){
+if(smooth[y]>=threshold&&smooth[y]>=smooth[y-1]&&smooth[y]>=smooth[y+1]){
+if(!candidates.length||y-candidates[candidates.length-1]>12)candidates.push(y);
+else if(smooth[y]>smooth[candidates[candidates.length-1]])candidates[candidates.length-1]=y;
+}
+}
+var best=null,bestScore=Infinity;
+for(var i=0;i<=candidates.length-15;i++){
+var seq=candidates.slice(i,i+15),ds=[];
+for(var j=1;j<seq.length;j++)ds.push(seq[j]-seq[j-1]);
+var avg=ds.reduce(function(a,b){return a+b;},0)/ds.length;
+if(avg<30||avg>100)continue;
+var variance=ds.reduce(function(a,b){return a+Math.pow(b-avg,2);},0)/ds.length;
+var score=Math.sqrt(variance)/avg;
+if(score<bestScore){bestScore=score;best=seq;}
+}
+return best||candidates.slice(0,15);
+}
+function scanOneNameRow(canvas,y0,y1){
+var c=document.createElement("canvas"),ctx=c.getContext("2d",{willReadFrequently:true});
+var x0=Math.floor(canvas.width*.28),x1=Math.floor(canvas.width*.98);
+var top=Math.max(0,Math.floor(y0+6)),bottom=Math.min(canvas.height,Math.floor(y1-6));
+if(bottom<=top)return Promise.resolve("");
+c.width=Math.max(1,(x1-x0)*3);c.height=Math.max(1,(bottom-top)*3);
+ctx.drawImage(canvas,x0,top,x1-x0,bottom-top,0,0,c.width,c.height);
+var data=ctx.getImageData(0,0,c.width,c.height),d=data.data;
+for(var i=0;i<d.length;i+=4){
+var v=.299*d[i]+.587*d[i+1]+.114*d[i+2];
+v=Math.max(0,Math.min(255,(v-125)*1.8+145));d[i]=d[i+1]=d[i+2]=v;
+}
+ctx.putImageData(data,0,0);
+return Tesseract.recognize(c,"fra+eng",{tessedit_pageseg_mode:"7",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(r){
+return cleanRecognizedName((r.data&&r.data.text)||"");
+});
+}
 function scanMatchSheet(file){
 if(!file)return;
 var status=el("scanStatus"),review=el("scanReview");
 review.style.display="none";review.innerHTML="";
 if(!window.Tesseract){status.textContent="❌ Le moteur OCR n’est pas disponible.";return;}
-status.textContent="⏳ Lecture des numéros et des noms…";
+status.textContent="⏳ Repérage des lignes du tableau…";
 loadImageFile(file).then(function(img){
-var original=cleanScanCanvas(img);
-return Tesseract.recognize(original,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(first){
-var bestCanvas=original,best=first;
-if(scanOcrScore(first)<8){
-var rotated=cleanScanCanvas(rotateScanImage(img));
-return Tesseract.recognize(rotated,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(second){
-if(scanOcrScore(second)>scanOcrScore(first)){bestCanvas=rotated;best=second;}
-return {canvas:bestCanvas,result:best};
-});
+var base=cleanScanCanvas(img);
+var lines=detectScanTableLines(base);
+if(lines.length<15)throw new Error("Impossible de repérer les 14 lignes du tableau.");
+status.textContent="⏳ Lecture des 14 noms, ligne par ligne…";
+var jobs=[];
+for(var n=0;n<14;n++){
+var y0=lines[n],y1=lines[n+1];
+jobs.push(scanOneNameRow(base,y0,y1).then(function(name){return name;}));
 }
-return {canvas:bestCanvas,result:best};
-});
-}).then(function(base){
-var crop=cropScanComposition(base.canvas,base.result);
-var hint=scanTeamHint((base.result.data&&base.result.data.text)||"");
-status.textContent="⏳ Lecture de chaque ligne joueur…";
-var W=crop.canvas.width;
-var table=scanCropX(crop.canvas,Math.round(W*.02),Math.round(W*.86));
-var gray=scanGrayCanvas(table);
-return Promise.all([
-Tesseract.recognize(table,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(gray,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
-]).then(function(results){
-var a=extractNumberedNames(results[0]),b=extractNumberedNames(results[1]);
-var map={};
-a.concat(b).forEach(function(x){
-if(!map[x.number]||x.name.length>map[x.number].name.length)map[x.number]=x;
-});
+return Promise.all(jobs).then(function(names){
 var rows=[];
-for(var n=1;n<=14;n++)if(map[n])rows.push(map[n]);
-window.showFullScanReview(rows,hint);
-status.textContent="✅ Noms des joueurs détectés. Vérifiez avant validation.";
+for(var n=0;n<14;n++){
+var name=cleanRecognizedName(names[n]||"");
+rows.push({number:n+1,name:name,license:"",role:"",y:lines[n]});
+}
+window.showFullScanReview(rows,"");
+status.textContent="✅ Les 14 lignes ont été lues. Vérifiez les noms avant validation.";
 });
 }).catch(function(err){
 console.error("OCR",err);
-status.textContent="❌ Erreur OCR : "+(err&&err.message?err.message:"lecture impossible");
+status.textContent="❌ "+(err&&err.message?err.message:"Lecture impossible");
 });
 }
 function escapeHtmlAttr(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");}
