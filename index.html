@@ -1082,14 +1082,11 @@ function showPageDirect(pageId){var pages=document.querySelectorAll(".page");pag
 function deleteChange(index){
  var x=changes[index];if(!x)return;
  if(!confirm("Supprimer ce changement ?"))return;
+ changes.splice(index,1);
  var team=x.team==="A"?playersA:playersB;
- var outMatch=String(x.out||"").match(/n°(\\d+)/i);
- var inMatch=String(x.in||"").match(/n°(\\d+)/i);
- var outIndex=outMatch?Number(outMatch[1])-1:-1;
- var inIndex=inMatch?Number(inMatch[1])-1:-1;
- if(outIndex>=0&&outIndex<team.length)team[outIndex].active=true;
- if(inIndex>=0&&inIndex<team.length)team[inIndex].active=false;
- changes.splice(index,1);saveState();renderChanges();
+ syncChangeRoster(team,x.team);
+ saveState();
+ renderChanges();
 }
 function renderChanges(){var c=el("changeHistory");c.innerHTML="";if(!changes.length){c.innerHTML="<p class='note'>Aucun changement.</p>";return;}changes.forEach(function(x,i){var d=document.createElement("div");d.className="change-item";var line=document.createElement("div");line.textContent=x.minute+" · Équipe "+x.team+" : "+x.out+" → "+x.in;d.appendChild(line);var actions=document.createElement("div");actions.style.display="flex";actions.style.gap="8px";actions.style.marginTop="8px";var del=document.createElement("button");del.type="button";del.textContent="🗑️ Supprimer";del.className="red";del.onclick=function(){deleteChange(i);};actions.appendChild(del);addMinuteButton(actions,changes,i,renderChanges);d.appendChild(actions);c.appendChild(d);});}
 function updateGoalButtonLabels(){
