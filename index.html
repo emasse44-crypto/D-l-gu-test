@@ -652,7 +652,39 @@ renderAllPlayers();renderStaff(staffA,"staffA");renderStaff(staffB,"staffB");sav
 box.querySelector("#cancelScanReview").onclick=function(){box.style.display="none";box.innerHTML="";el("scanStatus").textContent="Lecture annulée.";};
 }
 function downloadText(filename,text){var blob=new Blob([text],{type:"text/plain;charset=utf-8"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}function teamDownloadText(team,name){readPlayers(team,team===playersA?"playersA":"playersB");var lines=[name,"==============================","CAPITAINE : "+(function(){var i=team.findIndex(function(p){return p.captain;});return i>=0?playerLabel(team[i],i):"Non renseigné";})(),"","TITULAIRES"];team.slice(0,11).forEach(function(p,i){lines.push((i+1)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});lines.push("","REMPLAÇANTS");team.slice(11,14).forEach(function(p,i){lines.push((i+12)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});team.slice(14,16).forEach(function(p,i){if(p.name||p.role)lines.push((i+15)+". "+(p.name||"Non renseigné")+" · "+(p.role==="E"?"Éducateur":p.role==="D"?"Dirigeant":"Rôle non renseigné")+" · Licence : "+playerLicense(p));});return lines.join("\n");}function downloadTeam(team,name,file){downloadText(file,teamDownloadText(team,name));}function playerLabel(p,i){return (p.name||("Joueur "+(i+1)))+" (n°"+(i+1)+")";} function playerLicense(p){return p.license||"Non renseigné";}
-function setupChange(team,label){readPlayers(team,team===playersA?"playersA":"playersB");var hasActive=team.some(function(p){return p.active===true;});if(!hasActive){team.forEach(function(p,i){p.active=i<11;});saveState();}el("changeTeamLabel").textContent=label;var out=el("playerOut"),inn=el("playerIn");out.innerHTML="";inn.innerHTML="";team.forEach(function(p,i){if(p.active){var o=document.createElement("option");o.value=i;o.textContent=playerLabel(p,i);out.appendChild(o);}if(!p.active&&i>=11){var q=document.createElement("option");q.value=i;q.textContent=playerLabel(p,i);inn.appendChild(q);}});el("changeForm").style.display="block";el("changeForm").dataset.team=team===playersA?"A":"B";if(!inn.options.length){inn.innerHTML="<option value=''>Aucun remplaçant disponible</option>";}}
+function syncChangeRoster(team,side){
+  readPlayers(team,team===playersA?"playersA":"playersB");
+  while(team.length<16)team.push({name:"",license:"",captain:false,active:false,role:""});
+  for(var i=0;i<14;i++)team[i].active=(i<11);
+  changes.forEach(function(x){
+    if(x.team!==side)return;
+    var outMatch=String(x.out||"").match(/n°(\d+)/i);
+    var inMatch=String(x.in||"").match(/n°(\d+)/i);
+    var outIndex=outMatch?Number(outMatch[1])-1:-1;
+    var inIndex=inMatch?Number(inMatch[1])-1:-1;
+    if(outIndex>=0&&outIndex<14)team[outIndex].active=false;
+    if(inIndex>=0&&inIndex<14)team[inIndex].active=true;
+  });
+}
+function setupChange(team,label){
+  var side=team===playersA?"A":"B";
+  syncChangeRoster(team,side);
+  el("changeTeamLabel").textContent=label+" · 14 joueurs";
+  var out=el("playerOut"),inn=el("playerIn");
+  out.innerHTML="";inn.innerHTML="";
+  for(var i=0;i<14;i++){
+    var p=team[i];
+    if(p.active){
+      var o=document.createElement("option");o.value=i;o.textContent=playerLabel(p,i)+" · sur le terrain";out.appendChild(o);
+    }else{
+      var q=document.createElement("option");q.value=i;q.textContent=playerLabel(p,i)+" · remplaçant / sorti";inn.appendChild(q);
+    }
+  }
+  el("changeForm").style.display="block";
+  el("changeForm").dataset.team=side;
+  if(!out.options.length)out.innerHTML="<option value=''>Aucun joueur sur le terrain</option>";
+  if(!inn.options.length)inn.innerHTML="<option value=''>Aucun remplaçant disponible</option>";
+}
 function confirmChange(){var team=el("changeForm").dataset.team==="A"?playersA:playersB;var outIndex=Number(el("playerOut").value),inIndex=Number(el("playerIn").value);if(!Number.isInteger(outIndex)||!Number.isInteger(inIndex)||!team[inIndex]){alert("Choisissez un joueur sortant et un remplaçant.");return;}var outPlayer=team[outIndex],inPlayer=team[inIndex];if(!outPlayer.active||inPlayer.active||inIndex<11){alert("Changement impossible.");return;}outPlayer.active=false;inPlayer.active=true;changes.push({team:el("changeForm").dataset.team,out:playerLabel(outPlayer,outIndex),in:playerLabel(inPlayer,inIndex),minute:Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0")});el("changeForm").style.display="none";renderChanges();saveState();}
 function setupCard(side,label){
   var form=el("cardForm");
