@@ -602,41 +602,19 @@ return out.slice(0,30);
 }
 function extractNumberedNames(result){
 var words=(result.data&&result.data.words)||[],rows=[];
-words.forEach(function(word){
-var t=normalizeOcrLine(word.text||"");if(!t)return;
-var b=word.bbox||{},x=Number(b.x0)||0,y=((Number(b.y0)||0)+(Number(b.y1)||0))/2;
-var row=null;
-for(var i=rows.length-1;i>=0;i--){if(Math.abs(rows[i].y-y)<=28){row=rows[i];break;}if(rows[i].y<y-45)break;}
-if(!row){row={y:y,words:[]};rows.push(row);}
-row.words.push({text:t,x:x});
-});
-rows.sort(function(a,b){return a.y-b.y;});
+words.forEach(function(word){var t=normalizeOcrLine(word.text||"");if(!t)return;var b=word.bbox||{},x=Number(b.x0)||0,y=((Number(b.y0)||0)+(Number(b.y1)||0))/2,row=null;for(var i=rows.length-1;i>=0;i--){if(Math.abs(rows[i].y-y)<=28){row=rows[i];break;}if(rows[i].y<y-45)break;}if(!row){row={y:y,words:[]};rows.push(row);}row.words.push({text:t,x:x});});
+rows.sort(function(a,b){return a.y-b.y;});if(!rows.length)return [];
+var anchors=[],numberXs=[];
+rows.forEach(function(row){var found=0,nx=Infinity;row.words.forEach(function(w){var m=String(w.text).replace(/[^\d]/g,"");if(/^([1-9]|1[0-4])$/.test(m)&&w.x<220){found=Number(m);nx=Math.min(nx,w.x);}});if(found>=1&&found<=14){anchors.push({n:found,y:row.y});numberXs.push(nx);}});
+var map={};anchors.forEach(function(a){map[a.n]=a;});anchors=Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return a.n-b.n;});
+var spacing=0;if(anchors.length>=2){var ds=[];for(var i=1;i<anchors.length;i++){var dn=anchors[i].n-anchors[i-1].n,dy=anchors[i].y-anchors[i-1].y;if(dn>0&&dy>0)ds.push(dy/dn);}if(ds.length){ds.sort(function(a,b){return a-b;});spacing=ds[Math.floor(ds.length/2)];}}
+if(!spacing)spacing=55;
+var origin=anchors.length?anchors[0].y-(anchors[0].n-1)*spacing:rows[0].y;
+if(anchors.length>1){var last=anchors[anchors.length-1];origin=(origin+last.y-(last.n-1)*spacing)/2;}
+var numberX=numberXs.length?numberXs.reduce(function(a,b){return a+b;},0)/numberXs.length:80;
 var out=[];
-rows.forEach(function(row){
-row.words.sort(function(a,b){return a.x-b.x;});
-var num=0,numberX=Infinity;
-row.words.forEach(function(w){
-var m=String(w.text).match(/^(?:N°|Nº|NO|N)?\s*(1[0-4]|[1-9])$/i);
-if(m){num=Number(m[1]);numberX=w.x;}
-});
-if(!num)return;
-var parts=[];
-row.words.forEach(function(w){
-if(w.x<=numberX+35)return;
-var t=w.text.replace(/[^A-Za-zÀ-ÿ' .-]/g," ").replace(/\s+/g," ").trim();
-if(t.length>=2)parts.push(t);
-});
-var name=cleanRecognizedName(parts.join(" "));
-if(!name||name.length<3)return;
-out.push({number:num,name:name,license:"",role:"",y:row.y});
-});
-var best={};
-out.forEach(function(x){
-if(!best[x.number]||x.name.length>best[x.number].name.length)best[x.number]=x;
-});
-var final=[];
-for(var n=1;n<=14;n++){if(best[n])final.push(best[n]);}
-return final;
+for(var n=1;n<=14;n++){var target=origin+(n-1)*spacing,selected=[];rows.forEach(function(row){if(Math.abs(row.y-target)<=Math.max(20,Math.min(35,spacing*.46))){row.words.forEach(function(w){if(w.x<=numberX+35)return;var t=w.text.replace(/[^A-Za-zÀ-ÿ' .-]/g," ").replace(/\s+/g," ").trim();if(t.length>=2)selected.push({x:w.x,text:t});});}});selected.sort(function(a,b){return a.x-b.x;});var name=cleanRecognizedName(selected.map(function(w){return w.text;}).join(" "));if(name&&name.length>=3&&!/^(maillot|nom|pr[ée]nom|joueurs?|équipe|equipe|position|titulaire|remplaçant|remplacant|encadrement)$/i.test(name))out.push({number:n,name:name,license:"",role:"",y:target});}
+return out;
 }
 function scanMatchSheet(file){
 if(!file)return;
