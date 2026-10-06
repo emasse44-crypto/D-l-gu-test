@@ -720,7 +720,7 @@ team[n-1].role="";
 for(var j=0;j<team.length;j++){if(j!==team.findIndex(function(p){return p&&p.captain;}))team[j].captain=false;}
 saveState();
 box.style.display="none";
-if(side==="B")renderTeam(playersB,"playersB","Équipe B");else renderTeam(playersA,"playersA","Équipe A");
+if(side==="B")renderPlayers(playersB,"playersB");else renderPlayers(playersA,"playersA");
 alert("Composition enregistrée pour l’Équipe "+side+".");
 };
 function downloadText(filename,text){var blob=new Blob([text],{type:"text/plain;charset=utf-8"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}function teamDownloadText(team,name){readPlayers(team,team===playersA?"playersA":"playersB");var lines=[name,"==============================","CAPITAINE : "+(function(){var i=team.findIndex(function(p){return p.captain;});return i>=0?playerLabel(team[i],i):"Non renseigné";})(),"","TITULAIRES"];team.slice(0,11).forEach(function(p,i){lines.push((i+1)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});lines.push("","REMPLAÇANTS");team.slice(11,16).forEach(function(p,i){lines.push((i+12)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});return lines.join("\n");}function downloadTeam(team,name,file){downloadText(file,teamDownloadText(team,name));}function playerLabel(p,i){return (p.name||("Joueur "+(i+1)))+" (n°"+(i+1)+")";} function playerLicense(p){return p.license||"Non renseigné";}
