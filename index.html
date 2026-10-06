@@ -638,99 +638,44 @@ var final=[];
 for(var n=1;n<=14;n++){if(best[n])final.push(best[n]);}
 return final;
 }
-function extractOcrRowsByY(result){
-var words=(result.data&&result.data.words)||[],rows=[];
-words.forEach(function(w){
-var t=normalizeOcrLine(w.text||"");if(!t)return;
-var b=w.bbox||{},x=Number(b.x0)||0,y0=Number(b.y0)||0,y1=Number(b.y1)||0,cy=(y0+y1)/2;
-var row=null;
-for(var i=rows.length-1;i>=0;i--){if(Math.abs(rows[i].y-cy)<=26){row=rows[i];break;}if(rows[i].y<cy-45)break;}
-if(!row){row={y:cy,words:[]};rows.push(row);}
-row.words.push({text:t,x:x});
-});
-rows.sort(function(a,b){return a.y-b.y;});
-return rows;
-}
-function extractNumberColumn(result){
-var rows=extractOcrRowsByY(result),out=[];
-rows.forEach(function(row){
-var best=0;
-row.words.forEach(function(w){
-var t=String(w.text).replace(/[^d]/g,"");
-if(!t)return;
-var n=Number(t);
-if(n>=1&&n<=14)best=n;
-});
-if(best)out.push({number:best,y:row.y});
-});
-var unique={};
-out.forEach(function(x){
-if(!unique[x.number]||Math.abs(x.y)<Math.abs(unique[x.number].y))unique[x.number]=x;
-});
-return out.filter(function(x){return unique[x.number]===x;});
-}
-function extractNameColumn(result){
-var rows=extractOcrRowsByY(result),out=[];
-rows.forEach(function(row){
-row.words.sort(function(a,b){return a.x-b.x;});
-var text=row.words.map(function(w){return w.text;}).join(" ");
-var name=cleanRecognizedName(text);
-if(!name)return;
-if(/^(maillot|nom|pr[ée]nom|joueurs?|équipe|equipe|position|titulaire|remplaçant|remplacant)$/i.test(name))return;
-out.push({name:name,y:row.y});
-});
-return out;
-}
-function pairNumberNames(numbers,names){
-var result={},used={};
-numbers.forEach(function(num){
-var best=null,bestDist=Infinity;
-names.forEach(function(n,i){
-if(used[i])return;
-var d=Math.abs(n.y-num.y);
-if(d<bestDist&&d<=55){best=n;bestDist=d;}
-});
-if(best){
-used[names.indexOf(best)]=true;
-if(!result[num.number]||best.name.length>result[num.number].name.length){
-result[num.number]={number:num.number,name:best.name,license:"",role:"",y:num.y};
-}
-}
-});
-var out=[];
-for(var n=1;n<=14;n++)if(result[n])out.push(result[n]);
-return out;
-}
 function scanMatchSheet(file){
 if(!file)return;
 var status=el("scanStatus"),review=el("scanReview");
 review.style.display="none";review.innerHTML="";
 if(!window.Tesseract){status.textContent="❌ Le moteur OCR n’est pas disponible.";return;}
-status.textContent="⏳ Lecture de la colonne des numéros…";
+status.textContent="⏳ Lecture des numéros et des noms…";
 loadImageFile(file).then(function(img){
 var original=cleanScanCanvas(img);
 return Tesseract.recognize(original,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(first){
-var crop=cropScanComposition(original,first).canvas;
-return {canvas:crop,hint:scanTeamHint((first.data&&first.data.text)||"")};
+var bestCanvas=original,best=first;
+if(scanOcrScore(first)<8){
+var rotated=cleanScanCanvas(rotateScanImage(img));
+return Tesseract.recognize(rotated,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(second){
+if(scanOcrScore(second)>scanOcrScore(first)){bestCanvas=rotated;best=second;}
+return {canvas:bestCanvas,result:best};
+});
+}
+return {canvas:bestCanvas,result:best};
 });
 }).then(function(base){
-var W=base.canvas.width;
-var numbersCanvas=scanCropX(base.canvas,0,Math.round(W*.25));
-var namesCanvas=scanCropX(base.canvas,Math.round(W*.20),Math.round(W*.90));
-var namesGray=scanGrayCanvas(namesCanvas);
-var namesBW=scanThresholdCanvas(namesGray,185);
+var crop=cropScanComposition(base.canvas,base.result);
+var hint=scanTeamHint((base.result.data&&base.result.data.text)||"");
+status.textContent="⏳ Lecture de chaque ligne joueur…";
+var W=crop.canvas.width;
+var table=scanCropX(crop.canvas,Math.round(W*.02),Math.round(W*.86));
+var gray=scanGrayCanvas(table);
 return Promise.all([
-Tesseract.recognize(numbersCanvas,"eng",{tessedit_pageseg_mode:"6",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(numbersCanvas,"eng",{tessedit_pageseg_mode:"11",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesCanvas,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesGray,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesBW,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
-]).then(function(r){
-status.textContent="⏳ Association numéro → nom…";
-var nums=extractNumberColumn(r[0]).concat(extractNumberColumn(r[1]));
-var names=extractNameColumn(r[2]).concat(extractNameColumn(r[3])).concat(extractNameColumn(r[4]));
-var rows=pairNumberNames(nums,names);
-window.showFullScanReview(rows,base.hint);
+Tesseract.recognize(table,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(gray,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
+]).then(function(results){
+var a=extractNumberedNames(results[0]),b=extractNumberedNames(results[1]);
+var map={};
+a.concat(b).forEach(function(x){
+if(!map[x.number]||x.name.length>map[x.number].name.length)map[x.number]=x;
+});
+var rows=[];
+for(var n=1;n<=14;n++)if(map[n])rows.push(map[n]);
+window.showFullScanReview(rows,hint);
 status.textContent="✅ Noms des joueurs détectés. Vérifiez avant validation.";
 });
 }).catch(function(err){
@@ -1378,7 +1323,7 @@ var _renderStaffHistoryMinute=renderStaffHistory;
 renderStaffHistory=function(){_renderStaffHistoryMinute();refreshStaffCardMinuteEditor();};
 
 loadState();playersA.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});playersB.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});if(running&&typeof chronoStartedAt==="number"){startChronoRefresh();syncChrono();}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=15").catch(function(){});});}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=16").catch(function(){});});}
 renderAllPlayers();update();updateGoalButtonLabels();
 })();
 </script>
