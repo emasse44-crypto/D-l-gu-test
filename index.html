@@ -600,18 +600,55 @@ return !!x.name||!!x.license||!!x.role;
 });
 return out.slice(0,30);
 }
+function extractNumberedNames(result){
+var words=(result.data&&result.data.words)||[],rows=[];
+words.forEach(function(word){
+var t=normalizeOcrLine(word.text||"");if(!t)return;
+var b=word.bbox||{},x=Number(b.x0)||0,y=((Number(b.y0)||0)+(Number(b.y1)||0))/2;
+var row=null;
+for(var i=rows.length-1;i>=0;i--){if(Math.abs(rows[i].y-y)<=28){row=rows[i];break;}if(rows[i].y<y-45)break;}
+if(!row){row={y:y,words:[]};rows.push(row);}
+row.words.push({text:t,x:x});
+});
+rows.sort(function(a,b){return a.y-b.y;});
+var out=[];
+rows.forEach(function(row){
+row.words.sort(function(a,b){return a.x-b.x;});
+var num=0,numberX=Infinity;
+row.words.forEach(function(w){
+var m=String(w.text).match(/^(?:N°|Nº|NO|N)?\s*(1[0-4]|[1-9])$/i);
+if(m){num=Number(m[1]);numberX=w.x;}
+});
+if(!num)return;
+var parts=[];
+row.words.forEach(function(w){
+if(w.x<=numberX+35)return;
+var t=w.text.replace(/[^A-Za-zÀ-ÿ' .-]/g," ").replace(/\s+/g," ").trim();
+if(t.length>=2)parts.push(t);
+});
+var name=cleanRecognizedName(parts.join(" "));
+if(!name||name.length<3)return;
+out.push({number:num,name:name,license:"",role:"",y:row.y});
+});
+var best={};
+out.forEach(function(x){
+if(!best[x.number]||x.name.length>best[x.number].name.length)best[x.number]=x;
+});
+var final=[];
+for(var n=1;n<=14;n++){if(best[n])final.push(best[n]);}
+return final;
+}
 function scanMatchSheet(file){
 if(!file)return;
-var status=el("scanStatus"),review=el("scanReview");review.style.display="none";review.innerHTML="";
+var status=el("scanStatus"),review=el("scanReview");
+review.style.display="none";review.innerHTML="";
 if(!window.Tesseract){status.textContent="❌ Le moteur OCR n’est pas disponible.";return;}
-status.textContent="⏳ Préparation de la photo…";
+status.textContent="⏳ Lecture des numéros et des noms…";
 loadImageFile(file).then(function(img){
 var original=cleanScanCanvas(img);
-status.textContent="⏳ Lecture générale de la feuille…";
 return Tesseract.recognize(original,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(first){
 var bestCanvas=original,best=first;
-if(scanOcrScore(first)<12){
-status.textContent="⏳ Vérification de l’orientation…";
+if(scanOcrScore(first)<8){
 var rotated=cleanScanCanvas(rotateScanImage(img));
 return Tesseract.recognize(rotated,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}).then(function(second){
 if(scanOcrScore(second)>scanOcrScore(first)){bestCanvas=rotated;best=second;}
@@ -621,89 +658,45 @@ return {canvas:bestCanvas,result:best};
 return {canvas:bestCanvas,result:best};
 });
 }).then(function(base){
-var crop=cropScanComposition(base.canvas,base.result),hint=scanTeamHint((base.result.data&&base.result.data.text)||"");
-status.textContent="⏳ Lecture renforcée des noms et des numéros…";
-
-var W=crop.canvas.width,H=crop.canvas.height;
-var namesCanvas=scanCropX(crop.canvas,Math.round(W*.12),Math.round(W*.84));
-var namesGray=scanGrayCanvas(namesCanvas);
-var namesBW=scanThresholdCanvas(namesGray,178);
-var namesBW2=scanThresholdCanvas(namesGray,205);
-
-var right=scanCropX(crop.canvas,Math.round(W*.56),W);
-var rightBW=scanThresholdCanvas(scanGrayCanvas(right),190);
-
-var staffCanvas=scanCropX(crop.canvas,Math.round(W*.12),Math.round(W*.72));
-var staffGray=scanGrayCanvas(staffCanvas);
-
-status.textContent="⏳ Comparaison de plusieurs lectures OCR…";
+var crop=cropScanComposition(base.canvas,base.result);
+var hint=scanTeamHint((base.result.data&&base.result.data.text)||"");
+status.textContent="⏳ Lecture de chaque ligne joueur…";
+var W=crop.canvas.width;
+var table=scanCropX(crop.canvas,Math.round(W*.02),Math.round(W*.86));
+var gray=scanGrayCanvas(table);
 return Promise.all([
-Tesseract.recognize(namesCanvas,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesGray,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesBW,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(namesBW2,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(right,"eng",{tessedit_pageseg_mode:"6",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(rightBW,"eng",{tessedit_pageseg_mode:"11",tessedit_char_whitelist:"0123456789",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(staffCanvas,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
-Tesseract.recognize(staffGray,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
-]).then(function(r){
-var nameResults=[r[0],r[1],r[2],r[3]];
-var nameRows=[];
-nameResults.forEach(function(res){nameRows=nameRows.concat(extractScanRows(res));});
-var licenseRows=extractScanLicenseRows(r[4]).concat(extractScanLicenseRows(r[5]));
-var staffRows=[];
-staffRows=staffRows.concat(extractScanRows(r[6])).concat(extractScanRows(r[7]));
-
-var rows=mergeScanRows(nameRows,[],licenseRows,[]);
-var numbered=rows.filter(function(x){return x.number>=1&&x.number<=14;});
-var lastY=numbered.length?Math.max.apply(null,numbered.map(function(x){return x.y;})):0;
-
-staffRows.forEach(function(x){
-if(x.name&&x.y>lastY+35){
- var exists=rows.some(function(y){return y.name&&y.name.toLowerCase()===x.name.toLowerCase()&&Math.abs(y.y-x.y)<45;});
- if(!exists)rows.push({y:x.y,name:x.name,license:"",number:0,role:""});
-}
+Tesseract.recognize(table,"fra+eng",{tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"}),
+Tesseract.recognize(gray,"fra+eng",{tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",user_defined_dpi:"300",load_system_dawg:"0",load_freq_dawg:"0"})
+]).then(function(results){
+var a=extractNumberedNames(results[0]),b=extractNumberedNames(results[1]);
+var map={};
+a.concat(b).forEach(function(x){
+if(!map[x.number]||x.name.length>map[x.number].name.length)map[x.number]=x;
 });
-rows.sort(function(a,b){return a.y-b.y;});
+var rows=[];
+for(var n=1;n<=14;n++)if(map[n])rows.push(map[n]);
 window.showFullScanReview(rows,hint);
-status.textContent="✅ Lecture renforcée terminée. Vérifiez noms, licences et encadrement.";
+status.textContent="✅ Noms des joueurs détectés. Vérifiez avant validation.";
 });
-}).catch(function(err){console.error("OCR",err);status.textContent="❌ Erreur OCR : "+(err&&err.message?err.message:"lecture impossible");});
+}).catch(function(err){
+console.error("OCR",err);
+status.textContent="❌ Erreur OCR : "+(err&&err.message?err.message:"lecture impossible");
+});
 }
 function escapeHtmlAttr(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");}
 window.showFullScanReview=function(rows,hint){
 var box=el("scanReview");if(!box)return;
 var players=rows.filter(function(x){return x.number>=1&&x.number<=14;}).slice(0,14);
-var staff=rows.filter(function(x){return x.number===0||x.number>14;}).slice(0,10);
-var html='<div class="scan-review"><h4>🔎 Vérification de la composition</h4><div class="note">Les joueurs 1 à 14 sont récupérés dans la composition. Les membres d’encadrement sont récupérés séparément dans la rubrique 👔 Staff, sans modifier votre saisie manuelle des n°15 et 16.</div>'+(hint?'<div class="note" style="margin-top:8px">✅ <strong>Équipe '+hint+' détectée automatiquement</strong>.</div>':'<label class="note">Équipe à remplir</label><select data-scan-team style="margin-top:6px"><option value="A">Équipe A</option><option value="B">Équipe B</option></select>')+'<div class="scan-team-review"><h4>Joueurs détectés</h4>';
+var html='<div class="scan-review"><h4>🔎 Vérification des joueurs</h4><div class="note">Le scanner récupère uniquement le nom situé en face de chaque numéro 1 à 14. Les licences et l’encadrement ne sont pas lus.</div>'+(hint?'<div class="note" style="margin-top:8px">✅ <strong>Équipe '+hint+' détectée automatiquement</strong>.</div>':'<label class="note">Équipe à remplir</label><select data-scan-team style="margin-top:6px"><option value="A">Équipe A</option><option value="B">Équipe B</option></select>')+'<div class="scan-team-review"><h4>Joueurs détectés</h4>';
 if(!players.length)html+='<div class="note">⚠️ Aucun joueur reconnu.</div>';
-players.forEach(function(x,i){
-var n=x.number||i+1;html+='<div class="scan-row"><div class="scan-num">'+n+'</div><input type="text" value="'+escapeHtmlAttr(x.name)+'" data-scan-name="'+i+'" data-scan-number="'+n+'" placeholder="Nom / prénom"><input type="text" value="'+escapeHtmlAttr(x.license||"")+'" data-scan-license="'+i+'" placeholder="N° licence"></div><label class="scan-captain"><input type="checkbox" '+(/capitaine/i.test(x.name)?"checked":"")+' data-scan-cap="'+i+'"> Capitaine</label>';
-});
-html+='</div><div class="scan-team-review" style="margin-top:10px"><h4>👔 Encadrement détecté ('+staff.length+')</h4>';
-if(!staff.length)html+='<div class="note">Aucun membre d’encadrement reconnu.</div>';
-staff.forEach(function(x,i){
-var role=x.role||"";html+='<div class="scan-row"><div class="scan-num">E'+(i+1)+'</div><input type="text" value="'+escapeHtmlAttr(x.name)+'" data-scan-staff-name="'+i+'" placeholder="Nom / prénom"><input type="text" value="'+escapeHtmlAttr(role)+'" data-scan-staff-role="'+i+'" placeholder="Fonction (E, M, A, D/DR)"></div>';
-});
-html+='</div><button class="green" id="confirmScanReview" style="width:100%;margin-top:12px">✅ Valider la composition</button><button id="cancelScanReview" style="width:100%;margin-top:8px">Annuler</button></div>';
-box.innerHTML=html;box.style.display="block";
-box.querySelector("#confirmScanReview").onclick=function(){
-var selector=box.querySelector("select[data-scan-team]"),side=hint||(selector?selector.value:"A"),team=side==="B"?playersB:playersA;
-for(var i=0;i<16;i++){team[i].name="";team[i].license="";team[i].captain=false;team[i].active=i<11;}
-box.querySelectorAll("input[data-scan-name]").forEach(function(input){
-var i=Number(input.getAttribute("data-scan-name")),n=Number(input.getAttribute("data-scan-number")),lic=box.querySelector('input[data-scan-license="'+i+'"]'),cap=box.querySelector('input[data-scan-cap="'+i+'"]');
-if(n>=1&&n<=16){team[n-1].name=input.value.trim();team[n-1].license=lic?lic.value.trim():"";team[n-1].captain=!!(cap&&cap.checked);team[n-1].active=n<=11;}
-});
-var staffTarget=side==="B"?staffB:staffA;
-for(var si=0;si<5;si++){staffTarget[si]="";}
-box.querySelectorAll("input[data-scan-staff-name]").forEach(function(input){
-var i=Number(input.getAttribute("data-scan-staff-name")),roleInput=box.querySelector('input[data-scan-staff-role="'+i+'"]'),name=input.value.trim(),role=roleInput?roleInput.value.trim():"";
-if(name)staffTarget[i]=name+(role?" · "+role:"");
-});
-renderAllPlayers();renderStaff(staffA,"staffA");renderStaff(staffB,"staffB");saveState();box.style.display="none";box.innerHTML="";el("scanStatus").textContent="✅ Joueurs et encadrement récupérés. Vérifiez encore le tableau.";
-};
-box.querySelector("#cancelScanReview").onclick=function(){box.style.display="none";box.innerHTML="";el("scanStatus").textContent="Lecture annulée.";};
+for(var n=1;n<=14;n++){
+var x=players.find(function(p){return p.number===n;});
+html+='<div class="scan-row"><div class="scan-num">'+n+'</div><input type="text" value="'+escapeHtmlAttr(x?x.name:"")+'" data-scan-name="'+(n-1)+'" data-scan-number="'+n+'" placeholder="Nom / prénom"></div><label class="scan-captain"><input type="checkbox" data-scan-cap="'+(n-1)+'"> Capitaine</label>';
 }
+html+='</div><button type="button" class="primary" style="margin-top:12px" onclick="applyScanPlayers()">✅ Valider les joueurs</button></div>';
+box.innerHTML=html;box.style.display="block";
+};
+
 function downloadText(filename,text){var blob=new Blob([text],{type:"text/plain;charset=utf-8"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}function teamDownloadText(team,name){readPlayers(team,team===playersA?"playersA":"playersB");var lines=[name,"==============================","CAPITAINE : "+(function(){var i=team.findIndex(function(p){return p.captain;});return i>=0?playerLabel(team[i],i):"Non renseigné";})(),"","TITULAIRES"];team.slice(0,11).forEach(function(p,i){lines.push((i+1)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});lines.push("","REMPLAÇANTS");team.slice(11,16).forEach(function(p,i){lines.push((i+12)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});return lines.join("\n");}function downloadTeam(team,name,file){downloadText(file,teamDownloadText(team,name));}function playerLabel(p,i){return (p.name||("Joueur "+(i+1)))+" (n°"+(i+1)+")";} function playerLicense(p){return p.license||"Non renseigné";}
 function isPlayerSentOff(side,index){
   return cards.some(function(x){
