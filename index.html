@@ -694,9 +694,35 @@ var x=players.find(function(p){return p.number===n;});
 html+='<div class="scan-row"><div class="scan-num">'+n+'</div><input type="text" value="'+escapeHtmlAttr(x?x.name:"")+'" data-scan-name="'+(n-1)+'" data-scan-number="'+n+'" placeholder="Nom / prénom"></div><label class="scan-captain"><input type="checkbox" data-scan-cap="'+(n-1)+'"> Capitaine</label>';
 }
 html+='</div><button type="button" class="primary" style="margin-top:12px" onclick="applyScanPlayers()">✅ Valider les joueurs</button></div>';
-box.innerHTML=html;box.style.display="block";
+box.innerHTML=html;box.dataset.scanTeam=hint||"";
+box.style.display="block";
+if(!hint){
+var sel=box.querySelector("[data-scan-team]");
+if(sel)sel.onchange=function(){box.dataset.scanTeam=sel.value;};
+}
 };
-
+window.applyScanPlayers=function(){
+var box=el("scanReview"),side=box&&box.dataset.scanTeam;
+if(!side){
+var sel=box&&box.querySelector("[data-scan-team]");
+side=sel?sel.value:"A";
+}
+var team=side==="B"?playersB:playersA;
+for(var n=1;n<=14;n++){
+var input=box.querySelector('[data-scan-number="'+n+'"]');
+var cap=box.querySelector('[data-scan-cap="'+(n-1)+'"]');
+if(!team[n-1])team[n-1]={name:"",license:"",captain:false,active:n<=11,role:""};
+team[n-1].name=input?String(input.value||"").trim():"";
+team[n-1].captain=!!(cap&&cap.checked);
+team[n-1].active=n<=11;
+team[n-1].role="";
+}
+for(var j=0;j<team.length;j++){if(j!==team.findIndex(function(p){return p&&p.captain;}))team[j].captain=false;}
+saveState();
+box.style.display="none";
+if(side==="B")renderTeam(playersB,"playersB","Équipe B");else renderTeam(playersA,"playersA","Équipe A");
+alert("Composition enregistrée pour l’Équipe "+side+".");
+};
 function downloadText(filename,text){var blob=new Blob([text],{type:"text/plain;charset=utf-8"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}function teamDownloadText(team,name){readPlayers(team,team===playersA?"playersA":"playersB");var lines=[name,"==============================","CAPITAINE : "+(function(){var i=team.findIndex(function(p){return p.captain;});return i>=0?playerLabel(team[i],i):"Non renseigné";})(),"","TITULAIRES"];team.slice(0,11).forEach(function(p,i){lines.push((i+1)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});lines.push("","REMPLAÇANTS");team.slice(11,16).forEach(function(p,i){lines.push((i+12)+". "+(p.name||"Non renseigné")+" · Licence : "+playerLicense(p));});return lines.join("\n");}function downloadTeam(team,name,file){downloadText(file,teamDownloadText(team,name));}function playerLabel(p,i){return (p.name||("Joueur "+(i+1)))+" (n°"+(i+1)+")";} function playerLicense(p){return p.license||"Non renseigné";}
 function isPlayerSentOff(side,index){
   return cards.some(function(x){
