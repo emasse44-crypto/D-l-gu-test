@@ -1127,10 +1127,17 @@ function saveMatchInfo(){matchInfo.competition=el("competitionInput").value.trim
 function compressMatchPhoto(file,callback){
 var reader=new FileReader();reader.onload=function(){var img=new Image();img.onload=function(){var max=1600,w=img.width,h=img.height;if(w>max||h>max){if(w>=h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}var canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;var ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,w,h);callback(canvas.toDataURL("image/jpeg",0.78));};img.src=reader.result;};reader.readAsDataURL(file);
 }
+function openMatchPhoto(src){
+var old=el("photoViewer");if(old)old.remove();
+var overlay=document.createElement("div");overlay.id="photoViewer";overlay.style.position="fixed";overlay.style.inset="0";overlay.style.zIndex="9999";overlay.style.background="rgba(0,0,0,.92)";overlay.style.display="flex";overlay.style.alignItems="center";overlay.style.justifyContent="center";overlay.style.padding="12px";overlay.onclick=function(){overlay.remove();};
+var img=document.createElement("img");img.src=src;img.style.maxWidth="100%";img.style.maxHeight="100%";img.style.objectFit="contain";img.style.borderRadius="8px";overlay.appendChild(img);
+var close=document.createElement("button");close.type="button";close.textContent="✕ Fermer";close.style.position="absolute";close.style.top="16px";close.style.right="16px";close.style.zIndex="2";close.onclick=function(e){e.stopPropagation();overlay.remove();};overlay.appendChild(close);
+document.body.appendChild(overlay);
+}
 function renderMatchPhotos(){
 var box=el("matchPhotosPreview");if(!box)return;box.innerHTML="";
 if(!matchPhotos.length){box.innerHTML='<div class="note" style="grid-column:1/-1">Aucune photo ajoutée.</div>';return;}
-matchPhotos.forEach(function(src,i){var wrap=document.createElement("div");wrap.style.position="relative";var img=document.createElement("img");img.src=src;img.style.width="100%";img.style.aspectRatio="4/3";img.style.objectFit="cover";img.style.borderRadius="12px";img.style.border="1px solid #374151";wrap.appendChild(img);var del=document.createElement("button");del.type="button";del.textContent="🗑️";del.className="red";del.style.position="absolute";del.style.top="6px";del.style.right="6px";del.style.minWidth="42px";del.onclick=function(){matchPhotos.splice(i,1);saveState();renderMatchPhotos();renderReport();};wrap.appendChild(del);box.appendChild(wrap);});
+matchPhotos.forEach(function(src,i){var wrap=document.createElement("div");wrap.style.position="relative";var img=document.createElement("img");img.src=src;img.style.width="100%";img.style.aspectRatio="4/3";img.style.objectFit="cover";img.style.borderRadius="12px";img.style.border="1px solid #374151";img.style.cursor="zoom-in";img.title="Appuyer pour agrandir";img.onclick=function(){openMatchPhoto(src);};wrap.appendChild(img);var del=document.createElement("button");del.type="button";del.textContent="🗑️";del.className="red";del.style.position="absolute";del.style.top="6px";del.style.right="6px";del.style.minWidth="42px";del.onclick=function(){matchPhotos.splice(i,1);saveState();renderMatchPhotos();renderReport();};wrap.appendChild(del);box.appendChild(wrap);});
 }
 function addMatchPhotoFiles(files){
 var list=Array.from(files||[]);if(!list.length)return;var remaining=Math.max(0,12-matchPhotos.length);if(remaining===0){alert("Maximum 12 photos.");return;}
@@ -1354,7 +1361,7 @@ renderStaffHistory=function(){_renderStaffHistoryMinute();refreshStaffCardMinute
 
 loadState();
 setupMatchPhotos();playersA.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});playersB.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});if(running&&typeof chronoStartedAt==="number"){startChronoRefresh();syncChrono();}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=19").catch(function(){});});}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=20").catch(function(){});});}
 renderAllPlayers();update();updateGoalButtonLabels();
 })();
 </script>
