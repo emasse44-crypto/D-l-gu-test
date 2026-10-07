@@ -1240,7 +1240,8 @@ el("confirmStaffCard").onclick=confirmStaffCard;el("printSheet").onclick=functio
 el("addIncident").onclick=function(){var txt=el("incidentText").value.trim();if(!txt){alert("Décrivez l'incident.");return;}incidents.push({minute:formatMinute(seconds),text:txt});el("incidentText").value="";renderIncidents();saveState();};
 el("injuryTeam").onchange=renderInjuryPlayers;
 el("addInjury").onclick=function(){var side=el("injuryTeam").value,idx=Number(el("injuryPlayer").value),team=side==="A"?playersA:playersB;if(!Number.isInteger(idx)||!team[idx]){alert("Choisissez un joueur.");return;}var note=el("injuryText").value.trim();var out=el("injuryOut").checked;injuries.push({team:side,player:playerLabel(team[idx],idx),number:idx+1,minute:formatMinute(seconds),note:note,out:out});el("injuryText").value="";el("injuryOut").checked=false;renderInjuries();saveState();};
-el("printReport").onclick=function(){renderReport();window.print();};\nel("goToReport").onclick=function(){renderReport();showPageDirect("report");};
+el("printReport").onclick=function(){renderReport();window.print();};
+el("goToReport").onclick=function(){renderReport();showPageDirect("report");};
 
 /* ===== CORRECTION DIRECTE DES MINUTES ===== */
 function editEventMinute(items,index,renderFn){
@@ -1361,7 +1362,7 @@ renderStaffHistory=function(){_renderStaffHistoryMinute();refreshStaffCardMinute
 
 loadState();
 setupMatchPhotos();playersA.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});playersB.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});if(running&&typeof chronoStartedAt==="number"){startChronoRefresh();syncChrono();}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=22").catch(function(){});});}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=23").catch(function(){});});}
 renderAllPlayers();update();updateGoalButtonLabels();
 })();
 </script>
