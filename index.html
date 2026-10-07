@@ -122,7 +122,7 @@ input:focus,select:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,2
 <body>
 <div class="app">
 <h1>⚽ Délégué Football</h1>
-<div class="version">VERSION TEST · V26 · JOUR DE MATCH</div><div class="test-badge">🧪 VERSION TEST</div>
+<div class="version">VERSION TEST · V27 · JOUR DE MATCH</div><div class="test-badge">🧪 VERSION TEST</div>
 <section id="home">
 <div class="card"><div class="teams">
 <div><div class="team" id="teamA">Équipe A</div><div class="score" id="scoreA">0</div></div>
@@ -1191,6 +1191,14 @@ exclusionHtml=exclusions.map(function(x){return '<div style="margin-top:6px"><st
 }else exclusionHtml=empty("Aucune exclusion temporaire.");
 html+=section("⚪ EXCLUSIONS TEMPORAIRES",exclusionHtml);
 
+var photoHtml="";
+if(matchPhotos.length){
+  photoHtml=matchPhotos.map(function(src,i){
+    return '<div style="margin-top:10px"><img src="'+src+'" alt="Photo '+(i+1)+'" style="display:block;width:100%;max-height:520px;object-fit:contain;border-radius:10px;border:1px solid #374151"></div>';
+  }).join("");
+}else photoHtml=empty("Aucune photo enregistrée.");
+html+=section("📸 PHOTOS DU MATCH",photoHtml);
+
 box.innerHTML=html;
 }function goHome(){var pages=document.querySelectorAll(".page");pages.forEach(function(p){p.classList.remove("active");p.style.display="none";});var home=el("home");home.style.display="block";home.hidden=false;window.scrollTo(0,0);}
 function showPageDirect(pageId){var pages=document.querySelectorAll(".page");pages.forEach(function(p){p.classList.remove("active");p.style.display="none";p.hidden=false;});var home=document.getElementById("home");if(home){home.style.display="none";home.hidden=true;}var page=document.getElementById(pageId);if(!page)return;page.hidden=false;page.classList.add("active");page.style.display="block";if(pageId==="changes")renderChanges();if(pageId==="events")renderCards();}
@@ -1361,7 +1369,7 @@ renderStaffHistory=function(){_renderStaffHistoryMinute();refreshStaffCardMinute
 
 loadState();
 setupMatchPhotos();playersA.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});playersB.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});if(running&&typeof chronoStartedAt==="number"){startChronoRefresh();syncChrono();}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=26").catch(function(){});});}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=27").catch(function(){});});}
 renderAllPlayers();update();updateGoalButtonLabels();
 })();
 </script>
