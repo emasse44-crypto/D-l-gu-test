@@ -1354,7 +1354,7 @@ renderStaffHistory=function(){_renderStaffHistoryMinute();refreshStaffCardMinute
 
 loadState();
 setupMatchPhotos();playersA.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});playersB.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});if(running&&typeof chronoStartedAt==="number"){startChronoRefresh();syncChrono();}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=18").catch(function(){});});}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=19").catch(function(){});});}
 renderAllPlayers();update();updateGoalButtonLabels();
 })();
 </script>
