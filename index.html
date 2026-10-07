@@ -20,7 +20,7 @@ html{background:var(--bg)}
 body{margin:0;background:radial-gradient(circle at 50% -10%,#176b4a 0,#173653 28%,#101d30 55%,var(--bg) 78%);color:var(--text);font-family:Arial,sans-serif;padding:16px;min-height:100vh}
 .app{max-width:820px;margin:auto}
 h1{text-align:center;font-size:29px;margin:8px 0 4px;letter-spacing:-.4px}
-.version{text-align:center;color:var(--muted);font-size:12px;margin-bottom:18px;text-transform:uppercase;letter-spacing:1.1px}
+.version{text-align:center;color:var(--muted);font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:1.1px}.test-badge{text-align:center;display:block;width:max-content;max-width:100%;margin:0 auto 18px;padding:7px 14px;border-radius:999px;background:linear-gradient(135deg,#f59e0b,#dc2626);color:#fff;font-weight:900;font-size:12px;letter-spacing:.8px;box-shadow:0 4px 14px rgba(220,38,38,.25)}
 .card{background:linear-gradient(145deg,rgba(25,55,76,.98),rgba(17,35,53,.98));border:1px solid var(--line);box-shadow:0 12px 30px rgba(0,0,0,.18);border-radius:20px;padding:18px;margin-bottom:14px}
 #home>.card:first-child{padding:20px 16px;background:linear-gradient(145deg,#123b5d 0%,#163a54 48%,#174d3b 100%);border:1px solid rgba(56,189,248,.28);box-shadow:0 16px 38px rgba(0,0,0,.28),0 0 28px rgba(34,197,94,.08)}
 .teams{display:grid;grid-template-columns:1fr 92px 1fr;align-items:center;text-align:center;gap:8px}
@@ -122,7 +122,7 @@ input:focus,select:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,2
 <body>
 <div class="app">
 <h1>⚽ Délégué Football</h1>
-<div class="version">VERSION STABLE + JOUR DE MATCH</div>
+<div class="version">VERSION TEST · V20 · JOUR DE MATCH</div><div class="test-badge">🧪 VERSION TEST</div>
 <section id="home">
 <div class="card"><div class="teams">
 <div><div class="team" id="teamA">Équipe A</div><div class="score" id="scoreA">0</div></div>
@@ -1361,7 +1361,7 @@ renderStaffHistory=function(){_renderStaffHistoryMinute();refreshStaffCardMinute
 
 loadState();
 setupMatchPhotos();playersA.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});playersB.forEach(function(p,i){if(typeof p.active!=="boolean")p.active=i<11;});if(running&&typeof chronoStartedAt==="number"){startChronoRefresh();syncChrono();}
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=20").catch(function(){});});}
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js?v=21").catch(function(){});});}
 renderAllPlayers();update();updateGoalButtonLabels();
 })();
 </script>
